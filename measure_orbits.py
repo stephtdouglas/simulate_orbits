@@ -1,4 +1,4 @@
-import os, sys
+import os, sys, datetime
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -61,7 +61,7 @@ def clown_car(data,name,pmin,pmax,nsamples=int(7e4),jitter=False,
                                 sigma_v=100*u.km/u.s)
 
     if prior_cache_file is None:
-        prior_cache_file = os.path.join(cache_dir,"chelle_cache.hdf5")
+        prior_cache_file = os.path.join(cache_dir,"simulate_cache.hdf5")
 
     if os.path.exists(prior_cache_file) is False:
         prior_samples = prior.sample(size=nsamples,random_state=rnd)
@@ -204,28 +204,28 @@ if __name__=="__main__":
     rv_tab = at.read("test_syn_circ_rvs.csv")
 
     def get_data(nid,to_delete=None):
-        loc = np.where(rv_tab["id"]==nid)[0]
+        loc = np.where(rv_tab["star"]==nid)[0]
 
         if to_delete is not None:
             loc = np.delete(loc,to_delete)
 
         # Set up the RV Data object
-        t_raw = rv_tab["jd"][loc]*cds.JD # Need to work the HJD conversion in
+        t_raw = rv_tab["JD"][loc]*cds.JD # Need to work the HJD conversion in
         t_day = t_raw.to(u.day)
         t = t_day.value
         rv = rv_tab["rv(km/s)"][loc]*u.km/u.s
-        rve = np.ones_like(rv)*u.km/u.s
+        rve = np.ones_like(rv)#*u.km/u.s
         data = tj.RVData(t=t, rv=rv,rv_err=rve)
         return data
 
-    names,uniq_idx = np.unique(rv_tab["id"],return_index=True)
+    names,uniq_idx = np.unique(rv_tab["star"],return_index=True)
 
     nrv = np.zeros(len(uniq_idx),int)
     var_std = np.zeros(len(uniq_idx))
     med_rv = np.zeros(len(uniq_idx))
 
     for i, name in enumerate(names):
-        loc = np.where(name==rv_tab["id"])[0]
+        loc = np.where(name==rv_tab["star"])[0]
         nrv[i] = len(loc)
         if len(loc)>3:
             med_rv[i] = np.median(rv_tab["rv(km/s)"][loc])
@@ -236,8 +236,6 @@ if __name__=="__main__":
         else:
             med_rv[i] = np.nan
 
-    # prior_cache_file = os.path.join(cache_dir,"chelle_cache.hdf5")
-    # name = 9471435
 
     var = (var_std>3) & (nrv>=3) & np.isfinite(var_std)
     print(len(np.where(var)[0]))
@@ -247,6 +245,7 @@ if __name__=="__main__":
 
     for name in names:
         print(name)
+        print(datetime.datetime.now())
         data = get_data(name)
         clown_car(data,name,0.01*u.day,10000*u.day,
                   to_plot=True,nsamples=int(2e16),
