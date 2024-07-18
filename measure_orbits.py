@@ -7,9 +7,9 @@ import astropy.io.ascii as at
 import astropy.units as u
 import astropy.units.cds as cds
 import corner
-import pymc3 as pm
-import pymc3_ext as pmx
-import exoplanet as xo
+import pymc as pm
+#import pymc3_ext as pmx
+#import exoplanet as xo
 import arviz as az
 
 import schwimmbad
@@ -18,13 +18,13 @@ import thejoker as tj
 from thejoker.samples_analysis import is_P_unimodal, is_P_Kmodal
 
 # set up a random generator to ensure reproducibility
-rnd = np.random.default_rng(seed=42)
+#rnd = np.random.default_rng(seed=42)
 
 
 #hostname = os.getenv("HOSTNAME",default="hpc.cluster")
 #if hostname=="hpc.cluster":
-cache_dir = "/data2/douglaslab/douglste/orbits/jokercache/"
-results_dir = "/data2/douglaslab/douglste/orbits/jokerresults/"
+cache_dir = "/data2/labs/douglaslab/douglste/orbits/jokercache/"
+results_dir = "/data2/labs/douglaslab/douglste/orbits/jokerresults/"
 #else:
 #    cache_dir = os.path.expanduser("~/projects/jokercache/")
 #    results_dir = os.path.expanduser("~/projects/jokerresults/")
@@ -51,6 +51,7 @@ def clown_car(data,name,pmin,pmax,nsamples=int(7e4),jitter=False,
         ax = data.plot()
         ax.set_xlabel("Time [JD]")
         ax.set_ylabel("RV [km/s]")
+        print(os.path.exists(os.path.join(results_dir,"plots/")))
         plt.savefig(os.path.join(results_dir,"plots/{0}_data.png".format(name)))
         plt.close()
 
@@ -61,14 +62,19 @@ def clown_car(data,name,pmin,pmax,nsamples=int(7e4),jitter=False,
                                 sigma_v=100*u.km/u.s)
 
     if prior_cache_file is None:
+        print("no cache name given")
         prior_cache_file = os.path.join(cache_dir,"simulate_cache.hdf5")
 
     if os.path.exists(prior_cache_file) is False:
-        prior_samples = prior.sample(size=nsamples,random_state=rnd)
+        print("creating cache")
+        prior_samples = prior.sample(size=nsamples)#,random_state=rnd)
+        print("done sampling")
         prior_samples.write(prior_cache_file, overwrite=True)
         print("created cache")
     else:
+        print("reading cache")
         prior_samples = tj.JokerSamples.read(prior_cache_file)
+        print("read cache")
 
 
 
@@ -77,7 +83,8 @@ def clown_car(data,name,pmin,pmax,nsamples=int(7e4),jitter=False,
         # pool = schwimmbad.MultiPool()
             print("Multiprocessing")
             try:
-                joker = tj.TheJoker(prior,random_state=rnd,pool=pool)
+                joker = tj.TheJoker(prior,#random_state=rnd,
+                                    pool=pool)
                 samples = joker.rejection_sample(data, prior_cache_file,
                                                max_posterior_samples=256)
                 print("done sampling")
@@ -86,7 +93,7 @@ def clown_car(data,name,pmin,pmax,nsamples=int(7e4),jitter=False,
                 return 
     else:
         pool=None
-        joker = TheJoker(prior,random_state=rnd)
+        joker = TheJoker(prior)#,random_state=rnd)
         samples = joker.rejection_sample(data, prior_cache_file,
                                        max_posterior_samples=256)
 
@@ -119,15 +126,15 @@ def clown_car(data,name,pmin,pmax,nsamples=int(7e4),jitter=False,
     plt.close()
     print("Plotted fits")
 
-    if (nsamp>=1) and (nsamp<5):
-        for i in range(nsamp):
-            tj.plot_phase_fold(samples[i],data=data)
-            per = samples[i]["P"].to(u.day).value
-            ecc = samples[i]["e"]
-            plt.savefig(os.path.join(results_dir,"plots/{0}_P{1:.2f}_e{2:.2f}_phased.png".format(
-            name,per,ecc)))
-            plt.close()
-        print("plotted phased")
+#    if (nsamp>=1) and (nsamp<5):
+#        for i in range(nsamp):
+#            tj.plot_phase_fold(samples[i],data=data)
+#            per = samples[i]["P"].to(u.day).value
+#            ecc = samples[i]["e"]
+#            plt.savefig(os.path.join(results_dir,"plots/{0}_P{1:.2f}_e{2:.2f}_phased.png".format(
+#            name,per,ecc)))
+#            plt.close()
+#        print("plotted phased")
     plt.close("all")
     
     # if nsamp<1000:
@@ -156,7 +163,7 @@ def clown_car(data,name,pmin,pmax,nsamples=int(7e4),jitter=False,
     with prior.model:
         mcmc_init = joker.setup_mcmc(data, samples)
 
-        trace = pmx.sample(tune=1000, draws=1000,
+        trace = pm.sample(tune=1000, draws=1000,
                            start=mcmc_init)
                             # Cores/chains are set automatically if not specified
                            # cores=1, chains=2)
@@ -164,7 +171,7 @@ def clown_car(data,name,pmin,pmax,nsamples=int(7e4),jitter=False,
     if pool is not None:
         pool.close()
 
-    mcmc_samples = joker.trace_to_samples(trace, data)
+    mcmc_samples = tj.JokerSamples.from_inference_data(prior, trace, data)
     mcmc_samples.write(os.path.join(cache_dir,f"joker_samples_mcmc_{name}.hdf5"),overwrite=True)
     
     if to_plot is True:
@@ -247,7 +254,7 @@ if __name__=="__main__":
         print(name)
         print(datetime.datetime.now())
         data = get_data(name)
+        print(os.path.exists(os.path.join(results_dir,"plots/")))
         clown_car(data,name,0.01*u.day,10000*u.day,
-                  to_plot=True,nsamples=int(2e16),
+                  to_plot=True,nsamples=50_000_000,#int(2e4),
                   prior_cache_file=None,mpi=True)
-        # break
