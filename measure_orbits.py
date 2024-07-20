@@ -204,6 +204,13 @@ def clown_car(data,name,pmin,pmax,nsamples=int(7e4),jitter=False,
     
     print("DONE")
     plt.close("all")
+    del(prior)
+    del(samples)
+    try:
+        del(mcmc_samples)
+    except:
+        # They didn't exist
+        pass
 
 if __name__=="__main__":
 
@@ -256,5 +263,5 @@ if __name__=="__main__":
         data = get_data(name)
         print(os.path.exists(os.path.join(results_dir,"plots/")))
         clown_car(data,name,0.01*u.day,10000*u.day,
-                  to_plot=True,nsamples=50_000_000,#int(2e4),
+                  to_plot=True,nsamples=100_000_000,#int(2e4),
                   prior_cache_file=None,mpi=True)
